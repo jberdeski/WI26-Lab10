@@ -6,36 +6,51 @@ from contextlib import asynccontextmanager
 import mysql.connector
 import random
 import os
-app = FastAPI()
-
-app.mount("/static", StaticFiles(directory="static"), name="static")
+import time
+from contextlib import asynccontextmanager
 
 templates = Jinja2Templates(directory="templates")
-
+db = None
+cursor = None
 # MySQL connection
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    global db, cursor
+
     for _ in range(30):
         try:
-            conn = mysql.connector.connect(
-                host=os.environ["DB_HOST"],
-                user=os.environ["DB_USER"],
-                password=os.environ["DB_PASSWORD"],
-                database=os.environ["DB_NAME"],
+            db = mysql.connector.connect(
+                host=os.getenv("DB_HOST", "db"),
+                user=os.getenv("DB_USER", "root"),
+                password=os.getenv("DB_PASSWORD", ""),
+                database=os.getenv("DB_NAME", "guessgame"),
+                port=int(os.getenv("DB_PORT", "3306"))
             )
-            cursor = conn.cursor()
+            cursor = db.cursor()
             with open("init.sql") as f:
                 for statement in f.read().split(";"):
                     statement = statement.strip()
                     if statement:
                         cursor.execute(statement)
-            conn.commit()
-            yield
-            cursor.close()
-            conn.close()
+            db.commit()
             break
         except mysql.connector.Error:
             time.sleep(1)
+    else:
+        raise RuntimeError("Could not connect to MySQL")
+
+    try:
+        yield
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if db is not None and db.is_connected():
+            db.close()
+
+
+app = FastAPI(lifespan=lifespan)
+
+app.mount("/static", StaticFiles(directory="static"), name="static")
    
 
 SECRET_NUMBER = random.randint(1, 100)

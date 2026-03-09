@@ -9,5 +9,6 @@ dependencies = [
     "httpx",
     "python-dotenv>=1.2.2",
     "jinja2",
-    "python-multipart"
+    "python-multipart",
+    "asyncio>=4.0.0",
 ]
